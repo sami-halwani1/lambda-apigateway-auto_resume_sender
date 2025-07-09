@@ -25,19 +25,21 @@ This infrastructure allows you to:
 
 ---
 
-## Project Structure
-├── .github/workflows/deploy.yaml # CI/CD pipeline
+##  Project Structure
+.
+├── .github/
+│   └── workflows/
+│       └── deploy.yaml               # CI/CD pipeline
 ├── cloudformation/
-│ ├── createS3Bucket.yaml # CFN template to provision S3 bucket
-│ └── lambda-apigateway.yaml # CFN template to provision Lambda + API Gateway
+│   ├── createS3Bucket.yaml          # CFN template to provision S3 bucket
+│   └── lambda-apigateway.yaml       # CFN template to provision Lambda + API Gateway
 ├── code/
-│ └── index.py # Lambda function entry point
+│   └── index.py                     # Lambda function entry point
 ├── pdfs/
-│ └── your_resume.pdf # Resume to be uploaded to S3
+│   └── your_resume.pdf              # Resume to be uploaded to S3
 
----
 
-## ⚙️ Deployment Workflow (CI/CD)
+##  Deployment Workflow (CI/CD)
 
 On every `push` to the `main` branch, GitHub Actions will:
 
@@ -72,7 +74,7 @@ On every `push` to the `main` branch, GitHub Actions will:
 ```python
 # code/index.py
 
-def handler(event, context):
+def lambda_handler(event, context):
     return {
         "statusCode": 200,
         "body": "Resume available at https://your-bucket.s3.amazonaws.com/pdfs/<your-file.pdf>"
