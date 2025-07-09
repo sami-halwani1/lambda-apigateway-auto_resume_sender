@@ -2,6 +2,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+import json
 import os
 import boto3
 
@@ -21,18 +22,17 @@ Date: 07/08/2025
 """
 
 
-
 def get_resume_from_s3():
     s3 = boto3.client('s3')
+    bucket_name = os.environ.get("BUCKET_NAME")
+    object_key = os.environ.get("OBJECT_KEY") 
+
+    if not bucket_name or not object_key:
+        raise ValueError("Missing S3 bucket or object key in environment variables.") 
      
     try:
-        bucket_name = os.environ.get("BUCKET_NAME")
-        object_key = os.environ.get("OBJECT_KEY")  
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
-        pdf_content = response['Body'].read()
-        if not pdf_content:
-            raise ValueError("No content found in the PDF file.")
-        return pdf_content
+        return response['Body'].read()
     
     except Exception as e:
         print(f"Error retrieving file from S3: {e}")
@@ -41,62 +41,74 @@ def get_resume_from_s3():
 
 def format_msg(sender, requester):
 
-    subject = f"{sender["name"]}'s Resume | Software/Cloud Engineering"
+    subject = f"{sender['name']}'s Resume | Software/Cloud Engineering"
     body = f"""
-            Hi {requester["name"]},
-            
-            Thank you for taking the time to review my resume. I appreciate your interest and the opportunity to be considered for a potential role.
-            
-            If there's any additional information or documentation you need—whether that's work samples, references, or clarification on anything in my experience, please don't hesitate to reach out.
-            
-            Feel free to reference my Github to view some of my projects! 
-            ({sender["githubUrl"]})
+        Hi {requester['name']},
+                
+        Thank you for taking the time to review my resume. I appreciate your interest and the opportunity to be considered for a potential role.
+        
+        If there's any additional information or documentation you need—whether that's work samples, references, or clarification on anything in my experience, please don't hesitate to reach out.
+        
+        Feel free to reference my Github to view some of my projects! 
+        ({sender["githubUrl"]})
 
-            Looking forward to hearing from you.
+        Looking forward to hearing from you.
 
-            Best regards,  
-            {sender["name"]}  
-            {sender["phone"]}  
-            {sender["linkedInUrl"]}
-            """
+        Best regards,  
+        {sender['name']}  
+        {sender['phone']}  
+        {sender['linkedInUrl']}
+        """
 
     msg = MIMEMultipart()
-    msg['From'] = sender["email"]
-    msg['To'] = requester["email"]
+    msg['From'] = sender['email']
+    msg['To'] = requester['email']
+    msg['Reply-To'] = sender["email"]
+    msg['X-Priority'] = '1'
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
-    msg.attach(MIMEApplication(get_resume_from_s3(), Name="Sami_Halwani_Resume.pdf")) 
+    resume_data = get_resume_from_s3()
+    if resume_data:
+        msg.attach(MIMEApplication(resume_data, Name="Sami_Halwani_Resume.pdf")) 
+    else:
+        print("Warning: Resume could not be retrieved from S3.")
+
     return msg
 
 def send_email_with_attachment(sender, msg):
+    app_password = os.environ.get("APP_PASSWORD")
+    if not app_password:
+        raise ValueError("Missing APP_PASSWORD environment variable.")
+    
     server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.starttls()
-    server.login(sender["email"], os.environ.get("APP_PASSWORD"))
-    server.send_message(msg)
-    server.quit()
+    try:
+        server.starttls()
+        server.login(sender["email"], app_password)
+        server.send_message(msg)
+    finally:
+        server.quit()
 
 
 def lambda_handler(event, context):
-    sender = os.environ.get("SENDER")
-    requester = event["body"].get("requester")
-    app_password = os.environ.get("APP_PASSWORD")
-
+    sender_str = os.environ.get("SENDER")
+    sender = json.loads(sender_str)
     try:
-        msg = format_msg(sender, requester)
+        body = json.loads(event.get("body", "{}"))
+        requester = body.get("requester")
+        if not requester:
+            raise ValueError("Requester information is missing in the request body.")
     except Exception as e:
-        print(f"Error formatting message: {e}")
+        print(f"Invalid request body: {e}")
+        return {"statusCode": 400, "body": "Invalid request format."}
+    
+    try:
+        msg = format_msg(sender, requester) 
+        send_email_with_attachment (sender, msg)
+    except Exception as e:
+        print(f"Failed to send email: {e}")
         return {
             'statusCode': 500,
             'body': 'Error formatting message.'
-        }
-
-    try:
-        send_email_with_attachment (sender, msg)
-    except Exception as e:
-        print(f"Error sending email: {e}")
-        return {
-            'statusCode': 500,
-            'body': 'Error sending email.'
         }
 
     return {
