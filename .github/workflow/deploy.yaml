@@ -1,0 +1,99 @@
+name: Deploy Content to S3 and Deploy/Update CloudFormation Template
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'prod'
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Validate CloudFormation Templates
+        run: |
+          aws cloudformation validate-template --template-body file://cloudformation/createS3Bucket.yaml
+          aws cloudformation validate-template --template-body file://cloudformation/lambda-apigateway.yaml
+
+      - name: Check if S3 Bucket Exists
+        id: check_bucket
+        run: |
+          if aws s3api head-bucket --bucket "${{ secrets.S3_BUCKET_NAME }}" 2>/dev/null; then
+            echo "bucket_exists=true" >> $GITHUB_ENV
+          else
+            echo "bucket_exists=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create S3 Bucket via CloudFormation (if not exists)
+        if: env.bucket_exists == 'false'
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/createS3Bucket.yaml \
+            --stack-name automated-resume-bucket \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides BucketName=${{ secrets.S3_BUCKET_NAME }}
+
+      - name: Zip Lambda Function Code
+        run: |
+          cd code
+          zip -r ../lambda.zip .
+          cd ..
+
+      - name: Upload Lambda zip and Resume to S3
+        run: |
+          BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
+          RESUME_NAME="${{ secrets.RESUME_NAME }}"
+
+          aws s3 cp lambda.zip s3://$BUCKET_NAME/code/lambda.zip
+          aws s3 cp "$RESUME_NAME" s3://$BUCKET_NAME/pdfs/
+
+      - name: Check if Lambda Exists
+        id: check_lambda
+        run: |
+          if aws lambda get-function --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" 2>/dev/null; then
+            echo "lambda_exists=true" >> $GITHUB_ENV
+          else
+            echo "lambda_exists=false" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy Lambda Function + API Gateway if not Exists
+        if: env.lambda_exists == 'false'
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/lambda-apigateway.yaml \
+            --stack-name automated-resume-lambda \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              LambdaFunctionName=${{ secrets.LAMBDA_FUNCTION_NAME }} \
+              S3BucketName=${{ secrets.S3_BUCKET_NAME }} \
+              LambdaS3Key=code/lambda.zip
+
+      - name: Update Lambda Code (if exists)
+        if: env.lambda_exists == 'true'
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --s3-bucket "${{ secrets.S3_BUCKET_NAME }}" \
+            --s3-key code/lambda.zip
+
+      - name: Clean up zip file
+        run: rm lambda.zip
+
