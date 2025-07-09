@@ -26,7 +26,19 @@ This infrastructure allows you to:
 ---
 
 ##  Project Structure
-<pre> ```. ├── .github/ │ └── workflows/ │ └── deploy.yaml # CI/CD pipeline ├── cloudformation/ │ ├── createS3Bucket.yaml # CFN template to provision S3 bucket │ └── lambda-apigateway.yaml # CFN template to provision Lambda + API Gateway ├── code/ │ └── index.py # Lambda function entry point ├── pdfs/ │ └── your_resume.pdf # Resume to be uploaded to S3 ``` </pre>
+<pre>```
+.
+├── .github/
+│   └── workflows/
+│       └── deploy.yaml               # CI/CD pipeline
+├── cloudformation/
+│   ├── createS3Bucket.yaml          # CFN template to provision S3 bucket
+│   └── lambda-apigateway.yaml       # CFN template to provision Lambda + API Gateway
+├── code/
+│   └── index.py                     # Lambda function entry point
+├── pdfs/
+│   └── your_resume.pdf              # Resume to be uploaded to S3
+``` </pre>
 
 ##  Deployment Workflow (CI/CD)
 
