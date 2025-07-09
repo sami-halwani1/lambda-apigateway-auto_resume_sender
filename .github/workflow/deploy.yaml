@@ -84,7 +84,9 @@ jobs:
             --parameter-overrides \
               LambdaFunctionName=${{ secrets.LAMBDA_FUNCTION_NAME }} \
               S3BucketName=${{ secrets.S3_BUCKET_NAME }} \
-              LambdaS3Key=code/lambda.zip
+              LambdaS3Key=code/lambda.zip \
+              AppPassword=${{ secrets.APP_PASSWORD }} \
+              Sender='${{ secrets.SENDER }}'
 
       - name: Update Lambda Code (if exists)
         if: env.lambda_exists == 'true'

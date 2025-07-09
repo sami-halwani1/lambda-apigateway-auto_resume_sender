@@ -14,6 +14,15 @@ Parameters:
     Type: String
     Description: S3 key for the Lambda function code
     Default: code/lambda.zip
+  AppPassword:
+    Type: String
+    Description: SMTP password for sending emails
+    Default: <Your-SMTP-Password>
+  Sender:
+    Type: String
+    Description: Json String of Sender Details [name, email, phone, linkedInUrl, githubUrl]
+    Default: "{}"
+
 
 Resources:
   LambdaExecutionRole:
@@ -44,6 +53,12 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Environment:
+          Variables:
+            S3_BUCKET: !Ref S3BucketName
+            APP_PASSWORD: !Ref AppPassword
+            SENDER: !Ref Sender
       Code:
         S3Bucket: !Ref S3BucketName
         S3Key: !Ref LambdaS3Key
