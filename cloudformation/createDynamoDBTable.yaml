@@ -61,3 +61,5 @@ Outputs:
       - IsStreamEnabled
       - !GetAtt MyDynamoDBTable.LatestStreamArn
       - !Ref "AWS::NoValue"
+    Export:
+      Name: ${AWS::StackName}-MyDynamoDBTable-StreamArn
