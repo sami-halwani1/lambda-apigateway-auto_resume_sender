@@ -69,7 +69,7 @@ def format_msg(sender, requester):
     msg.attach(MIMEText(body, 'plain'))
     resume_data = get_resume_from_s3()
     if resume_data:
-        msg.attach(MIMEApplication(resume_data, Name="Sami_Halwani_Resume.pdf")) 
+        msg.attach(MIMEApplication(resume_data, Name=f"{sender['name']}_Resume.pdf")) 
     else:
         print("Warning: Resume could not be retrieved from S3.")
 
@@ -92,24 +92,45 @@ def send_email_with_attachment(sender, msg):
 def lambda_handler(event, context):
     sender_str = os.environ.get("SENDER")
     sender = json.loads(sender_str)
-    try:
-        body = json.loads(event.get("body", "{}"))
-        requester = body.get("requester")
-        if not requester:
-            raise ValueError("Requester information is missing in the request body.")
-    except Exception as e:
-        print(f"Invalid request body: {e}")
-        return {"statusCode": 400, "body": "Invalid request format."}
+    requester = {}
+
+    for record in event['Records']:
+        new_image = record['dynamodb']
+        try:
+            body = json.loads(new_image["NewImage"])
+            requester['name'] = body.get('name').get('S')
+            requester['email'] = body.get('email').get('S')
+        except Exception as e:
+            print(f"Error extracting requester information: {e}")
+            return {"statusCode": 400, "body": "Invalid requester information."}
+        try:
+            msg = format_msg(sender, requester) 
+            send_email_with_attachment (sender, msg)
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+            return {
+                'statusCode': 500,
+                'body': 'Error formatting message.'
+            }
+        
+    # try:
+    #     body = json.loads(event.get("body", "{}"))
+    #     requester = body.get("requester")
+    #     if not requester:
+    #         raise ValueError("Requester information is missing in the request body.")
+    # except Exception as e:
+    #     print(f"Invalid request body: {e}")
+    #     return {"statusCode": 400, "body": "Invalid request format."}
     
-    try:
-        msg = format_msg(sender, requester) 
-        send_email_with_attachment (sender, msg)
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-        return {
-            'statusCode': 500,
-            'body': 'Error formatting message.'
-        }
+    # try:
+    #     msg = format_msg(sender, requester) 
+    #     send_email_with_attachment (sender, msg)
+    # except Exception as e:
+    #     print(f"Failed to send email: {e}")
+    #     return {
+    #         'statusCode': 500,
+    #         'body': 'Error formatting message.'
+    #     }
 
     return {
             'statusCode': 200,

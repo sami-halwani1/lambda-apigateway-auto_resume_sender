@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a DynamoDB Table for Automated Resume Project and Enable DynamoDB Streams
+
+Parameters:
+  DynamoDBTableName:
+    Type: String
+    Default: AutomatedResumeTable
+    Description: Name of the DynamoDB Table
+
+  DynamoDBStreamEnabled:
+    Type: Boolean
+    Default: true
+    Description: Enable DynamoDB Streams (true/false)
+
+  DynamoDBStreamViewType:
+    Type: String
+    Default: NEW_AND_OLD_IMAGES
+    Description: View type for DynamoDB Streams
+
+  DynamoDBBillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    Description: Billing mode (PROVISIONED or PAY_PER_REQUEST)
+
+Conditions:
+  IsStreamEnabled: !Equals [!Ref DynamoDBStreamEnabled, 'true']
+
+Resources:
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoDBTableName
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: !Ref DynamoDBBillingMode
+      StreamSpecification:
+        StreamEnabled: !Ref DynamoDBStreamEnabled
+        StreamViewType: !If
+          - IsStreamEnabled
+          - !Ref DynamoDBStreamViewType
+          - !Ref "AWS::NoValue"
+
+Outputs:
+  DynamoDBTableName:
+    Description: Name of the DynamoDB Table
+    Value: !Ref MyDynamoDBTable
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTable"
+
+  DynamoDBTableArn:
+    Description: ARN of the DynamoDB Table
+    Value: !GetAtt MyDynamoDBTable.Arn
+
+  DynamoDBStreamArn:
+    Description: ARN of the DynamoDB Stream (if enabled)
+    Value: !If
+      - IsStreamEnabled
+      - !GetAtt MyDynamoDBTable.LatestStreamArn
+      - !Ref "AWS::NoValue"

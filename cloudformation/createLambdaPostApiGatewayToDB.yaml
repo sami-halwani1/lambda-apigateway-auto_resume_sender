@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a Lambda Fronted by API Gateway that Writes to a DynamoDB Table for Automated Resume Project
+
+Parameters:
+
+  LambdaFunctionName:
+    Type: String
+    Default: AutomatedResumeFunction
+    Description: Name of the Lambda Function
+
+  ApiGatewayName:
+    Type: String
+    Default: AutomatedResumeAPIGateway
+    Description: Name of the API Gateway
+  
+  DynamoDBTableName:
+    Type: String
+    Description: Name of the DynamoDB table to store resume data
+    Default: !ImportValue AutomatedResumeTable-DynamoDBTable
+
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaDynamoDBAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Description: Lambda function to write to DynamoDB
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from botocore.exceptions import ClientError
+          import datetime
+          import random
+          import string
+          from zoneinfo import ZoneInfo
+
+          def lambda_handler(event, context):
+              dynamodb = boto3.resource('dynamodb')
+              table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+              random.seed(datetime.datetime.now().timestamp())
+              hash_value = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+              try:
+                  body = json.loads(event['body'], '{}')
+                  response = table.put_item(
+                      Item={
+                          'id': hash_value,
+                          'createdAt': datetime.datetime.now(ZoneInfo("America/Los_Angeles")).isoformat(),
+                          'name': body.get('name', ''),
+                          'email': body.get('email', ''),
+                          'phone': body.get('phone', ''),
+                          'message': body.get('message', '')
+                      }
+                  )
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type,x-api-key',
+                          'Access-Control-Allow-Methods': 'POST'
+                      },
+                      'body': json.dumps({'message': 'Item added successfully', 'response': response})
+                  }
+              except ClientError as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/resume"
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref ApiGatewayName
+      Description: API Gateway for Lambda
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: resume
+
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+          - LambdaFunction: !GetAtt LambdaFunction.Arn
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [ApiGatewayMethod]
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: prod
+
+  ApiGatewayApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub '${LambdaFunctionName}-ApiKey'
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref ApiGatewayRestApi
+          StageName: prod
+
+  ApiGatewayUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub '${LambdaFunctionName}-UsagePlan'
+      ApiStages:
+        - ApiId: !Ref ApiGatewayRestApi
+          Stage: prod
+      Throttle:
+        RateLimit: 10
+        BurstLimit: 2
+
+  ApiGatewayUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiGatewayApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiGatewayUsagePlan
+
+Outputs:
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function created
+    Value: !Ref LambdaFunctionName
+
+  ApiGatewayUrl:
+    Description: Invoke URL of the API Gateway
+    Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/resume
+
+  ApiKey:
+    Description: API Key for accessing the API Gateway
+    Value: !Ref ApiGatewayApiKey
