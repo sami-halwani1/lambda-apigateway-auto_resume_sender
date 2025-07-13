@@ -1,33 +1,37 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Create a Lambda Function Fronted by a Rest API Gateway for Automated Resume Project
 
-#Working Correctly
-
 Parameters:
   LambdaFunctionName:
     Type: String
     Description: Name of the Lambda function
     Default: readFromDynamoDBStreamsFunction
+
   S3BucketName:
     Type: String
     Description: Name of the S3 bucket where code and PDFs are stored
     Default: my-automated-resume-bucket
+
   LambdaS3Key:
     Type: String
     Description: S3 key for the Lambda function code
     Default: code/lambda.zip
+
   AppPassword:
     Type: String
     Description: SMTP password for sending emails
-    Default: <Your-SMTP-Password>
+    Default: YourAppPassword
+
   Sender:
     Type: String
     Description: Json String of Sender Details '{name, email, phone, linkedInUrl, githubUrl}'
-    Default: '{}'
+    Default: '{"name":"YourName","email":"YourEmail","phone":"YourPhone","linkedInUrl":"YourLinkedIn","githubUrl":"YourGitHub"}'
+
   PDFFileName:
     Type: String
     Description: Name of the PDF file to be processed
-    Default: resume.pdf
+    Default: YourResume.pdf
+    
   DynamoDBTableName:
     Type: String
     Description: Name of the DynamoDB table to store resume data
@@ -103,8 +107,6 @@ Resources:
       Timeout: 30
       MemorySize: 128
       Description: Lambda function for automated resume project
-
-  
 
 Outputs:
   LambdaFunctionArn:

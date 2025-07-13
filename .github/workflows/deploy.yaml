@@ -30,8 +30,10 @@ jobs:
           
       - name: Validate CloudFormation Templates
         run: |
-          aws cloudformation validate-template --template-body file://cloudformation/createS3Bucket.yaml
-          aws cloudformation validate-template --template-body file://cloudformation/lambda-apigateway.yaml
+          aws cloudformation validate-template --template-body file://cloudformation/step1-createS3Bucket.yaml
+          aws cloudformation validate-template --template-body file://cloudformation/step2-createDynamoDBTable.yaml
+          aws cloudformation validate-template --template-body file://cloudformation/step3-createLambdaPostApiGatewayToDB.yaml
+          aws cloudformation validate-template --template-body file://cloudformation/step4-lambdaReadDynamoDBStreams.yaml
 
       - name: Check if S3 Bucket Exists
         id: check_bucket
@@ -50,6 +52,16 @@ jobs:
             --stack-name automated-resume-bucket \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides BucketName=${{ secrets.S3_BUCKET_NAME }}
+        
+      - name: Create DynamoDB Table + DynamoDB Streams 
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/step2-createDynamoDBTable.yaml \
+            --stack-name automated-resume-dynamodb-table \
+            --capabilities CAPABILITY_NAMED_IAM 
+      
+      - name: Create Lambda Function + API Gateway 
+        run: |
 
       - name: Zip Lambda Function Code
         run: |

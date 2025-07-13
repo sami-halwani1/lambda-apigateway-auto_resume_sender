@@ -1,7 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Create a DynamoDB Table for Automated Resume Project and Enable DynamoDB Streams
-
-# Works Correctly 
+Description: Create a DynamoDB Table To Store Resume Submissions and Enable Streams (Used for Lambda Processing)
 
 Parameters:
   DynamoDBTableName:
@@ -60,5 +58,5 @@ Outputs:
     Description: ARN of the DynamoDB Stream (if enabled)
     Value: !GetAtt MyDynamoDBTable.StreamArn 
     Export:
-      Name: !Sub "${DynamoDBTableName}-StreamArn"
+      Name: !Sub '${AWS::StackName}-${DynamoDBTableName}-StreamArn'
 

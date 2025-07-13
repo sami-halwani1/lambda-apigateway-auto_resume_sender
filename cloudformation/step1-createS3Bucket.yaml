@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Create an S3 bucket with public access block configuration
+Description: Create an S3 bucket to store resumes and related files for the Automated Resume Project
 
 Parameters:
   BucketName:
@@ -20,3 +20,15 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+
+Outputs:
+  BucketName:
+    Description: The name of the created S3 bucket
+    Value: !Ref MyS3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketName"
+  BucketArn:
+    Description: The ARN of the created S3 bucket
+    Value: !GetAtt MyS3Bucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketArn"
