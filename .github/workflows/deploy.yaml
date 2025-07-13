@@ -54,7 +54,12 @@ jobs:
       - name: Zip Lambda Function Code
         run: |
           cd code
-          zip -r ../lambda.zip .
+          if [ -f "lambda.zip" ]; then
+            Compress-Archive -Path "index.py" -DestinationPath "lambda.zip" -Update
+          else
+            Compress-Archive -Path "index.py" -DestinationPath "lambda.zip"
+          fi
+          
           cd ..
 
       - name: Upload Lambda zip and Resume to S3
@@ -97,5 +102,9 @@ jobs:
             --s3-key code/lambda.zip
 
       - name: Clean up zip file
-        run: rm lambda.zip
+        run: |
+          cd code
+          if [ -f "lambda.zip" ]; then
+            rm lambda.zip
+          fi
 

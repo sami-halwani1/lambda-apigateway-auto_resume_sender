@@ -91,13 +91,14 @@ def send_email_with_attachment(sender, msg):
 
 def lambda_handler(event, context):
     sender_str = os.environ.get("SENDER")
+    print(sender_str)
     sender = json.loads(sender_str)
     requester = {}
 
     for record in event['Records']:
         new_image = record['dynamodb']
         try:
-            body = json.loads(new_image["NewImage"])
+            body = new_image["NewImage"]
             requester['name'] = body.get('name').get('S')
             requester['email'] = body.get('email').get('S')
         except Exception as e:
