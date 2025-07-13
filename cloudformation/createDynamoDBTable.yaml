@@ -8,7 +8,7 @@ Parameters:
     Description: Name of the DynamoDB Table
 
   DynamoDBStreamEnabled:
-    Type: Boolean
+    Type: String
     Default: true
     Description: Enable DynamoDB Streams (true/false)
 
