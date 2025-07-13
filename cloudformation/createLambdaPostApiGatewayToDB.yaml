@@ -12,13 +12,14 @@ Parameters:
     Type: String
     Default: AutomatedResumeAPIGateway
     Description: Name of the API Gateway
-  
+
   DynamoDBTableName:
     Type: String
-    Description: Name of the DynamoDB table to store resume data
-    Default: !ImportValue AutomatedResumeTable-DynamoDBTable
+    Default: submissionDB
+    Description: Name of the DynamoDB Table to write to
 
 Resources:
+
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -40,6 +41,7 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                 Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -60,6 +62,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+        
       Code:
         ZipFile: |
           import json
@@ -74,10 +77,24 @@ Resources:
           def lambda_handler(event, context):
               dynamodb = boto3.resource('dynamodb')
               table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+
               random.seed(datetime.datetime.now().timestamp())
               hash_value = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
               try:
-                  body = json.loads(event['body'], '{}')
+                  try:
+                      body = json.loads(event.get('body') or '{}')
+                  except json.JSONDecodeError as e:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Headers': 'Content-Type,x-api-key',
+                              'Access-Control-Allow-Methods': 'POST'
+                          },
+                          'body': json.dumps({'error': 'Invalid JSON in request body', 'details': str(e)})
+                      }
+
                   response = table.put_item(
                       Item={
                           'id': hash_value,
@@ -88,6 +105,7 @@ Resources:
                           'message': body.get('message', '')
                       }
                   )
+
                   return {
                       'statusCode': 200,
                       'headers': {
@@ -97,6 +115,7 @@ Resources:
                       },
                       'body': json.dumps({'message': 'Item added successfully', 'response': response})
                   }
+
               except ClientError as e:
                   return {
                       'statusCode': 500,
@@ -148,6 +167,7 @@ Resources:
 
   ApiGatewayApiKey:
     Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiGatewayDeployment
     Properties:
       Name: !Sub '${LambdaFunctionName}-ApiKey'
       Enabled: true
@@ -157,6 +177,7 @@ Resources:
 
   ApiGatewayUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiGatewayDeployment
     Properties:
       UsagePlanName: !Sub '${LambdaFunctionName}-UsagePlan'
       ApiStages:
@@ -186,3 +207,7 @@ Outputs:
   ApiKey:
     Description: API Key for accessing the API Gateway
     Value: !Ref ApiGatewayApiKey
+
+  DynamoDBTableName:
+    Description: Name of the Referenced DynamoDB Table
+    Value: !Ref DynamoDBTableName

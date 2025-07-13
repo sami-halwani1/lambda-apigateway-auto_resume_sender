@@ -1,10 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Create a DynamoDB Table for Automated Resume Project and Enable DynamoDB Streams
 
+# Works Correctly 
+
 Parameters:
   DynamoDBTableName:
     Type: String
-    Default: AutomatedResumeTable
+    Default: submissionDB
     Description: Name of the DynamoDB Table
 
   DynamoDBStreamEnabled:
@@ -37,29 +39,26 @@ Resources:
         - AttributeName: id
           KeyType: HASH
       BillingMode: !Ref DynamoDBBillingMode
-      StreamSpecification:
-        StreamEnabled: !Ref DynamoDBStreamEnabled
-        StreamViewType: !If
-          - IsStreamEnabled
-          - !Ref DynamoDBStreamViewType
-          - !Ref "AWS::NoValue"
+      StreamSpecification: !If
+        - IsStreamEnabled
+        - StreamViewType: !Ref DynamoDBStreamViewType
+        - !Ref "AWS::NoValue"
 
 Outputs:
   DynamoDBTableName:
     Description: Name of the DynamoDB Table
-    Value: !Ref MyDynamoDBTable
+    Value: !Ref DynamoDBTableName
     Export:
-      Name: !Sub "${AWS::StackName}-DynamoDBTable"
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
 
   DynamoDBTableArn:
     Description: ARN of the DynamoDB Table
     Value: !GetAtt MyDynamoDBTable.Arn
 
   DynamoDBStreamArn:
+    Condition: IsStreamEnabled
     Description: ARN of the DynamoDB Stream (if enabled)
-    Value: !If
-      - IsStreamEnabled
-      - !GetAtt MyDynamoDBTable.LatestStreamArn
-      - !Ref "AWS::NoValue"
+    Value: !GetAtt MyDynamoDBTable.StreamArn 
     Export:
-      Name: ${AWS::StackName}-MyDynamoDBTable-StreamArn
+      Name: !Sub "${DynamoDBTableName}-StreamArn"
+
