@@ -13,16 +13,23 @@ Parameters:
     Default: AutomatedResumeAPIGateway
     Description: Name of the API Gateway
 
-  DynamoDBTableName:
+  DynamoDBTableTemplateURL:
     Type: String
-    Default: submissionDB
-    Description: Name of the DynamoDB Table to write to
+    Default: https://s3.amazonaws.com/msllc-cloudformation-templates/database/step2-automatedResume-createDynamoDBTable.yaml
+    Description: URL of the DynamoDB Table CloudFormation template
+
 
 Resources:
 
+  DynamoDBTableStack:
+      Type: AWS::CloudFormation::Stack
+      Properties: 
+        TemplateURL: !Ref DynamoDBTableTemplateURL
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+    DependsOn: 
+      - DynamoDBTableStack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -32,7 +39,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: LambdaDynamoDBAccessPolicy
+        - PolicyName: !Sub '${AWS::StackName}-LambdaDynamoDBAccessPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -40,7 +47,9 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+                Resource: !Sub 
+                  - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBOutputTableName}'
+                  - DynamoDBOutputTableName: !GetAtt DynamoDBTableStack.Outputs.DynamoDBTableName
 
               - Effect: Allow
                 Action:
@@ -51,8 +60,11 @@ Resources:
 
   LambdaFunction:
     Type: AWS::Lambda::Function
+    DependsOn: 
+    - LambdaExecutionRole
+    - DynamoDBTableStack
     Properties:
-      FunctionName: !Ref LambdaFunctionName
+      FunctionName: !Sub '${AWS::StackName}-${LambdaFunctionName}'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -61,7 +73,7 @@ Resources:
       Description: Lambda function to write to DynamoDB
       Environment:
         Variables:
-          DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+          DYNAMODB_TABLE_NAME: !GetAtt DynamoDBTableStack.Outputs.DynamoDBTableName
         
       Code:
         ZipFile: |
@@ -208,6 +220,3 @@ Outputs:
     Description: API Key for accessing the API Gateway
     Value: !Ref ApiGatewayApiKey
 
-  DynamoDBTableName:
-    Description: Name of the Referenced DynamoDB Table
-    Value: !Ref DynamoDBTableName

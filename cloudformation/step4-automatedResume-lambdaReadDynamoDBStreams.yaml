@@ -7,10 +7,15 @@ Parameters:
     Description: Name of the Lambda function
     Default: readFromDynamoDBStreamsFunction
 
-  S3BucketName:
+  AssetS3BucketName:
     Type: String
     Description: Name of the S3 bucket where code and PDFs are stored
     Default: my-automated-resume-bucket
+  
+  S3BucketNameTemplateURL:
+    Type: String
+    Description: URL of the S3 Bucket CloudFormation template
+    Default: https://s3.amazonaws.com/msllc-cloudformation-templates/s3Buckets/step1-automatedResume-createS3Bucket.yaml
 
   LambdaS3Key:
     Type: String
@@ -31,17 +36,30 @@ Parameters:
     Type: String
     Description: Name of the PDF file to be processed
     Default: YourResume.pdf
-    
-  DynamoDBTableName:
+  
+  DynamoDBTableTemplateURL:
     Type: String
-    Description: Name of the DynamoDB table to store resume data
-    Default: submissionDB
+    Description: URL of the DynamoDB Table CloudFormation template
+    Default: https://s3.amazonaws.com/msllc-cloudformation-templates/database/step2-automatedResume-createDynamoDBTable.yaml
 
 
 Resources:
 
+  S3BucketStack:
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: !Ref S3BucketNameTemplateURL
+  
+  DynamoDBTableStack:
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: !Ref DynamoDBTableTemplateURL
+
   LambdaExecutionRole:
     Type: 'AWS::IAM::Role'
+    DependsOn: 
+    - S3BucketStack
+    - DynamoDBTableStack
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -60,7 +78,9 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+                  - !Sub 
+                   - 'arn:aws:s3:::${S3BucketOutputName}/*'
+                   - S3BucketOutputName: !GetAtt S3BucketStack.Outputs.BucketName
               - Effect: Allow
                 Action:
                   - dynamodb:DescribeStream
@@ -69,8 +89,8 @@ Resources:
                   - dynamodb:ListStreams
                 Resource: 
                   - !Sub 
-                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}/stream/*'
-                    - DynamoDBTableName: !ImportValue resumeDBStack-DynamoDBTableName
+                    - 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableOutputName}/stream/*'
+                    - DynamoDBTableOutputName: !GetAtt DynamoDBTableStack.Outputs.DynamoDBTableName
               - Effect: Allow 
                 Action:
                   - logs:CreateLogGroup
@@ -80,16 +100,22 @@ Resources:
               
   MyEventSourceMapping:
       Type: AWS::Lambda::EventSourceMapping
-      DependsOn: LambdaFunction
+      DependsOn: 
+      - LambdaFunction
+      - DynamoDBTableStack
       Properties:
         BatchSize: 5
-        EventSourceArn: !ImportValue submissionDB-StreamArn
+        EventSourceArn: !GetAtt DynamoDBTableStack.Outputs.DynamoDBStreamArn
         FunctionName: !Ref LambdaFunction
         StartingPosition: LATEST
         Enabled: true
 
   LambdaFunction:
     Type: 'AWS::Lambda::Function'
+    DependsOn: 
+      - LambdaExecutionRole
+      - S3BucketStack
+      - DynamoDBTableStack
     Properties:
       FunctionName: !Ref LambdaFunctionName
       Runtime: python3.11
@@ -97,12 +123,12 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          BUCKET_NAME: !Ref S3BucketName
+          BUCKET_NAME: !GetAtt S3BucketStack.Outputs.BucketName
           OBJECT_KEY: !Sub pdfs/${PDFFileName}
           APP_PASSWORD: !Ref AppPassword
           SENDER: !Ref Sender
       Code:
-        S3Bucket: !Ref S3BucketName
+        S3Bucket: !Ref AssetS3BucketName
         S3Key: !Ref LambdaS3Key
       Timeout: 30
       MemorySize: 128

@@ -12,7 +12,7 @@ Resources:
   MyS3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Ref BucketName
+      BucketName: !Sub '${AWS::StackName}-${BucketName}'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:

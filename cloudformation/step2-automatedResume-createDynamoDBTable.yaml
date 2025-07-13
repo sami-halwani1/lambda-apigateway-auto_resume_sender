@@ -29,7 +29,7 @@ Resources:
   MyDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Ref DynamoDBTableName
+      TableName: !Sub '${AWS::StackName}-${DynamoDBTableName}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -45,9 +45,9 @@ Resources:
 Outputs:
   DynamoDBTableName:
     Description: Name of the DynamoDB Table
-    Value: !Ref DynamoDBTableName
-    Export:
-      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+    Value: !Sub '${AWS::StackName}-${DynamoDBTableName}'
+    # Export:
+    #   Name: !Sub '${AWS::StackName}-DynamoDBTableName'
 
   DynamoDBTableArn:
     Description: ARN of the DynamoDB Table
@@ -57,6 +57,6 @@ Outputs:
     Condition: IsStreamEnabled
     Description: ARN of the DynamoDB Stream (if enabled)
     Value: !GetAtt MyDynamoDBTable.StreamArn 
-    Export:
-      Name: !Sub '${AWS::StackName}-${DynamoDBTableName}-StreamArn'
+    # Export:
+    #   Name: !Sub '${AWS::StackName}-${DynamoDBTableName}-StreamArn'
 
