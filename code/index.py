@@ -26,7 +26,6 @@ def get_resume_from_s3():
     s3 = boto3.client('s3')
     bucket_name = os.environ.get("BUCKET_NAME")
     object_key = os.environ.get("OBJECT_KEY") 
-
     if not bucket_name or not object_key:
         raise ValueError("Missing S3 bucket or object key in environment variables.") 
      
@@ -43,23 +42,22 @@ def format_msg(sender, requester):
 
     subject = f"{sender['name']}'s Resume | Software/Cloud Engineering"
     body = f"""
-        Hi {requester['name']},
-                
-        Thank you for taking the time to review my resume. I appreciate your interest and the opportunity to be considered for a potential role.
+    Hi {requester['name']},
+    
+    Thank you for taking the time to review my resume. I appreciate your interest and the opportunity to be considered for a potential role.
+    
+    If there's any additional information or documentation you need—whether that's work samples, references, or clarification on anything in my experience, please don't hesitate to reach out.
         
-        If there's any additional information or documentation you need—whether that's work samples, references, or clarification on anything in my experience, please don't hesitate to reach out.
-        
-        Feel free to reference my Github to view some of my projects! 
-        ({sender["githubUrl"]})
+    Feel free to reference my Github to view some of my projects! 
+    ({sender["githubUrl"]})
 
-        Looking forward to hearing from you.
+    Looking forward to hearing from you.
 
-        Best regards,  
-        {sender['name']}  
-        {sender['phone']}  
-        {sender['linkedInUrl']}
-        """
-
+    Best regards,  
+    {sender['name']}  
+    {sender['phone']}  
+    {sender['linkedInUrl']}
+    """
     msg = MIMEMultipart()
     msg['From'] = sender['email']
     msg['To'] = requester['email']
@@ -91,7 +89,6 @@ def send_email_with_attachment(sender, msg):
 
 def lambda_handler(event, context):
     sender_str = os.environ.get("SENDER")
-    print(sender_str)
     sender = json.loads(sender_str)
     requester = {}
 
@@ -105,6 +102,7 @@ def lambda_handler(event, context):
             print(f"Error extracting requester information: {e}")
             return {"statusCode": 400, "body": "Invalid requester information."}
         try:
+            print(f"Message Details: Incoming")
             msg = format_msg(sender, requester) 
             send_email_with_attachment (sender, msg)
         except Exception as e:
@@ -113,25 +111,6 @@ def lambda_handler(event, context):
                 'statusCode': 500,
                 'body': 'Error formatting message.'
             }
-        
-    # try:
-    #     body = json.loads(event.get("body", "{}"))
-    #     requester = body.get("requester")
-    #     if not requester:
-    #         raise ValueError("Requester information is missing in the request body.")
-    # except Exception as e:
-    #     print(f"Invalid request body: {e}")
-    #     return {"statusCode": 400, "body": "Invalid request format."}
-    
-    # try:
-    #     msg = format_msg(sender, requester) 
-    #     send_email_with_attachment (sender, msg)
-    # except Exception as e:
-    #     print(f"Failed to send email: {e}")
-    #     return {
-    #         'statusCode': 500,
-    #         'body': 'Error formatting message.'
-    #     }
 
     return {
             'statusCode': 200,
